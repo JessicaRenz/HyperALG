@@ -1,6 +1,4 @@
 using Symbolics
-using Nemo
-using Groebner
 
 function polynomials_L3(D)
 
