@@ -96,7 +96,7 @@ function define_variables(L,start, dest)
             alist = push!(alist,i)
         end
     end
-    return (R = R, a, b , alist = alist, blist = blist)
+    return (R, a, b , alist = alist, blist = blist)
 end
 
 function read_data(L,data_label)
@@ -112,23 +112,138 @@ function read_data(L,data_label)
     return N
 end
 
-function A_polynomials(L,R,N)
+function A_polynomials(L,R,N,start, dest, alist, blist)
     CFN = Vector{typeof(one(R))}(undef,2^L)
-    CFN[1] = N[1]
+    CFN[1] = R(rationalize(N[1]))
     CBN = Vector{typeof(one(R))}(undef,2^L)
-    CBN[2^L] = N[2^L]
+    CBN[2^L] = R(rationalize(N[2^L]))
     A = Vector{typeof(one(R))}(undef,2^L)
-    A[1] = 1
-    A[2^L] = 1
+    A[1] = R(rationalize(1))
+    A[2^L] = R(rationalize(1))
     for i = 1:(L-1)
         for n = 1:2^L-2
             bin = number2binary(n,L)
             num_1 = count(c -> c == '1',bin)
             if num_1 == i
-                CFN[n+1] = N[n+1]
+                CFN[n+1] = R(rationalize(N[n+1]))
+                for j = 1: length(dest)
+                    if dest[j] == n 
+                        s = start[j]
+                        index = 0
+                        for k = 1: length(alist)
+                            if alist[k] == j 
+                                index = k 
+                            end
+                        end
+                        CFN[n+1]=CFN[n+1] + CFN[s+1]*a[index]
+                    end
+                end
+            end
+            if num_1 == L-i
+                CBN[n+1] = R(rationalize(N[n+1]))
+                for j = 1: length(start)
+                    if start[j] == n 
+                        g = dest[j]
+                        index = 0
+                        for k = 1: length(blist)
+                            if blist[k]==j 
+                                index = k 
+                            end
+                        end
+                        CBN[n+1] = CBN[n+1] + CBN[g+1]*b[index]
+                    end
+                end
             end
         end
     end
+    for n = 1: 2^L -2
+        A[n+1] = CFN[n+1] + CBN[n+1] - R(rationalize(N[n+1]))
+    end
+    return A 
+end
+
+function polynomial_system(L,R,As,start, dest, alist, blist)
+    P = Vector{typeof(one(R))}(undef,2^L-2)
+    for n = 1: 2^L -2
+        P[n] = -As[n+1]
+        for i = 1:length(dest)
+            if dest[i] == n 
+                s = start[i]
+                index = 0
+                for k = 1: length(alist)
+                    if alist[k] == i
+                        index = k
+                    end
+                end 
+                P[n] = P[n] + As[s+1]*a[index]
+            end
+        end
+    end
+    j = 0
+    for n = 1:2^L -1
+        bin = number2binary(n,L)
+        num_1 = count(c -> c == '1',bin)
+        if num_1 != 1
+            sum = 0
+            for i = 1: length(dest)
+                if dest[i] == n 
+                    s = start[i]
+                    index = 0
+                    for k = 1:length(alist)
+                        if alist[k] == i 
+                            index = k 
+                        end
+                    end
+                    if index != 0
+                        sum = sum + As[s+1]*a[index]
+                    end
+                end
+            end
+             for i = 1: length(dest)
+                if dest[i] == n 
+                    s = start[i]
+                    index_a = 0
+                    index_b = 0
+                    for k = 1:length(alist)
+                        if alist[k] == i 
+                            index_a = k 
+                        end
+                    end
+                    for l = 1:length(blist)
+                        if blist[l] == i 
+                            index_b = l 
+                        end
+                    end 
+                    if index_a != 0 && index_b != 0
+                        poly = - As[s+1]*a[index_a] + sum*b[index_b]
+                        P = push!(P,poly)
+                    end
+                end
+            end
+        end
+    end
+    n = 2^L - 1
+    sum = 0
+    for i = 1:length(dest)
+        if dest[i] == n 
+            s = start[i] 
+            sum = sum + As[s+1]
+        end
+    end
+    for j = 1:length(dest)
+        if dest[j] == n 
+            s = start[j]
+            index = 0
+            for i = 1: length(blist)
+                if blist[i] == j 
+                    index = i 
+                end
+            end
+            poly = -As[s+1] + sum*b[index]
+            P = push!(P,poly)
+        end
+    end
+    return P 
 end
 
 #Input data
@@ -146,4 +261,6 @@ start = edges_list.start
 dest = edges_list.dest
 var = define_variables(L, start, dest)
 N = read_data(L,data_label)
+As = A_polynomials(L,var.R,N,start,dest,var.alist,var.blist)
 
+P = polynomial_system(L,var.R,As,start,dest,var.alist,var.blist)
