@@ -1,4 +1,5 @@
 using Oscar
+using Pkg
 
 cd(@__DIR__)  # setzt das Working Directory auf den Ordner des Skripts
 
@@ -112,7 +113,7 @@ function read_data(L,data_label)
     return N
 end
 
-function A_polynomials(L,R,N,start, dest, alist, blist)
+function A_polynomials(L,R,a,b,N,start, dest, alist, blist)
     CFN = Vector{typeof(one(R))}(undef,2^L)
     CFN[1] = R(rationalize(N[1]))
     CBN = Vector{typeof(one(R))}(undef,2^L)
@@ -162,8 +163,10 @@ function A_polynomials(L,R,N,start, dest, alist, blist)
     return A 
 end
 
-function polynomial_system(L,R,As,start, dest, alist, blist)
+function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
     P = Vector{typeof(one(R))}(undef,2^L-2)
+    Pb_list =[]
+    index_list = []
     for n = 1: 2^L -2
         P[n] = -As[n+1]
         for i = 1:length(dest)
@@ -217,6 +220,9 @@ function polynomial_system(L,R,As,start, dest, alist, blist)
                     if index_a != 0 && index_b != 0
                         poly = - As[s+1]*a[index_a] + sum*b[index_b]
                         P = push!(P,poly)
+                        length_P = length(P)
+                        Pb_list= push!(Pb_list, length_P)
+                        index_list = push!(index_list,index_b)
                     end
                 end
             end
@@ -241,8 +247,137 @@ function polynomial_system(L,R,As,start, dest, alist, blist)
             end
             poly = -As[s+1] + sum*b[index]
             P = push!(P,poly)
+            length_P = length(P)
+            Pb_list = push!(Pb_list,length_P)
+            index_list = push!(index_list,index)
         end
     end
+    return (P_list =P,Pb_list =Pb_list, index_list =index_list) 
+end
+
+function remove_polynomials(P,L)
+    for i = 1:L
+        number = 0
+        for j = 1:2^L -2
+            bin = number2binary(j,L)
+            num_1 = count(c -> c == '1',bin) 
+            if num_1 == i
+                number = number +1
+            end
+        end
+        count_nodes = 0
+        for j = 1:2^L-2
+            bin = number2binary(j,L)
+            num_1 = count(c -> c == '1',bin)
+            if num_1 == i 
+                count_nodes = count_nodes +1
+                if count_nodes == number 
+                    deleteat!(P,j)
+                end 
+            end
+        end
+    end
+    return P 
+end
+
+function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_list,index_list)
+    nb = zeros(Int,2^L)
+    na = zeros(Int,2^L)
+    for n = 0:2^L-1
+        na[n+1] = n_partners[n+1]
+        cnt = 0
+        for i = 1:length(dest)
+            if dest[i] == n 
+                cnt = cnt +1
+            end
+        end
+        nb[n+1] = cnt
+    end
+    vars_all = [a;b]
+    length_a = length(a)
+    for s = 0:2^L-2
+        i = 0
+        sum_a = 0
+        for e = 1:length(start)
+            if start[e] == s 
+                i = i+1
+                if i != na[s+1]
+                    add_a = 0
+                    for j = 1:length(alist)
+                        if alist[j] == e 
+                            add_a = add_a + a[j]
+                            break
+                        end
+                    end
+                    sum_a = sum_a + add_a 
+                else
+                    for j = 1:length(alist)
+                        if alist[j] == e 
+                            vars_all[j] = 1 - sum_a
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+    b_red = []
+    for n = 1:2^L-1
+        i = 0
+        sum_b = 0
+        for e = 1:length(dest)
+            if dest[e] == n 
+                i = i+1
+                if i != nb[n+1]
+                    add_b = 0
+                    for j = 1:length(blist)
+                        if blist[j] == e 
+                            add_b = add_b + b[j]
+                            break
+                        end
+                    end
+                    sum_b = sum_b + add_b 
+                else 
+                    for j = 1:length(blist)
+                        if blist[j] == e 
+                            vars_all[length_a+j] = 1 - sum_b
+                            append!(b_red,e)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end
+   
+    for k = 1: length(P)
+        P[k] = evaluate(P[k],vars_all)
+    end
+    delete_list=[]
+    for i = 1:length(b_red)
+        println("i: $i")
+        P_entry = 0
+        e = b_red[i]
+        println("e: $e")
+        for j = 1:length(blist)
+            if blist[j] == e 
+                b_index = j
+                println("b_index: $b_index")
+                for k = 1:length(index_list)
+                    if index_list[k] == b_index
+                        println("k: $k")
+                        P_entry = Pb_list[k]
+                        println("P_entry: $P_entry")
+                        delete_list = push!(delete_list,P_entry)
+                        println("delete_list: $delete_list")
+                        break
+                    end
+                end
+                break
+            end
+        end
+    end
+    deleteat!(P,delete_list)
     return P 
 end
 
@@ -260,7 +395,12 @@ edges_list = edges(L,n_partners,cumulative_partners,partners)
 start = edges_list.start
 dest = edges_list.dest
 var = define_variables(L, start, dest)
+a = var.a
+b = var.b
 N = read_data(L,data_label)
-As = A_polynomials(L,var.R,N,start,dest,var.alist,var.blist)
+As = A_polynomials(L,var.R,a,b,N,start,dest,var.alist,var.blist)
 
-P = polynomial_system(L,var.R,As,start,dest,var.alist,var.blist)
+P = polynomial_system(L,var.R,a,b,As,start,dest,var.alist,var.blist)
+
+P_red = remove_variables(n_partners,start,dest,L,a,var.alist,b,var.blist,P.P_list,P.Pb_list,P.index_list)
+P_final = remove_polynomials(P_red,L)
