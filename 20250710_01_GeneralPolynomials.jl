@@ -1,5 +1,4 @@
 using Oscar
-using Pkg
 
 cd(@__DIR__)  # setzt das Working Directory auf den Ordner des Skripts
 
@@ -256,6 +255,7 @@ function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
 end
 
 function remove_polynomials(P,L)
+    delete_list = []
     for i = 1:L
         number = 0
         for j = 1:2^L -2
@@ -272,11 +272,12 @@ function remove_polynomials(P,L)
             if num_1 == i 
                 count_nodes = count_nodes +1
                 if count_nodes == number 
-                    deleteat!(P,j)
+                    delete_list = push!(delete_list,j)
                 end 
             end
         end
     end
+    deleteat!(P,delete_list)
     return P 
 end
 
@@ -349,27 +350,21 @@ function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_
             end
         end
     end
-   
+    println("vars_all: $vars_all")
     for k = 1: length(P)
         P[k] = evaluate(P[k],vars_all)
     end
     delete_list=[]
     for i = 1:length(b_red)
-        println("i: $i")
         P_entry = 0
         e = b_red[i]
-        println("e: $e")
         for j = 1:length(blist)
             if blist[j] == e 
                 b_index = j
-                println("b_index: $b_index")
                 for k = 1:length(index_list)
                     if index_list[k] == b_index
-                        println("k: $k")
                         P_entry = Pb_list[k]
-                        println("P_entry: $P_entry")
                         delete_list = push!(delete_list,P_entry)
-                        println("delete_list: $delete_list")
                         break
                     end
                 end
@@ -383,7 +378,7 @@ end
 
 #Input data
 L = 3
-data_label = "toy.txt"
+data_label = "ckeck.txt"
 
 #-----main function starts----
 
