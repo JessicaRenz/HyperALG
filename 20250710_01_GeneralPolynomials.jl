@@ -133,6 +133,7 @@ function A_polynomials(L,R,a,b,N,start, dest, alist, blist)
                         for k = 1: length(alist)
                             if alist[k] == j 
                                 index = k 
+                                break
                             end
                         end
                         CFN[n+1]=CFN[n+1] + CFN[s+1]*a[index]
@@ -148,6 +149,7 @@ function A_polynomials(L,R,a,b,N,start, dest, alist, blist)
                         for k = 1: length(blist)
                             if blist[k]==j 
                                 index = k 
+                                break
                             end
                         end
                         CBN[n+1] = CBN[n+1] + CBN[g+1]*b[index]
@@ -175,6 +177,7 @@ function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
                 for k = 1: length(alist)
                     if alist[k] == i
                         index = k
+                        break
                     end
                 end 
                 P[n] = P[n] + As[s+1]*a[index]
@@ -194,6 +197,7 @@ function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
                     for k = 1:length(alist)
                         if alist[k] == i 
                             index = k 
+                            break
                         end
                     end
                     if index != 0
@@ -201,7 +205,7 @@ function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
                     end
                 end
             end
-             for i = 1: length(dest)
+            for i = 1: length(dest)
                 if dest[i] == n 
                     s = start[i]
                     index_a = 0
@@ -209,17 +213,21 @@ function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
                     for k = 1:length(alist)
                         if alist[k] == i 
                             index_a = k 
+                            break
                         end
                     end
                     for l = 1:length(blist)
                         if blist[l] == i 
                             index_b = l 
+                            break
                         end
                     end 
                     if index_a != 0 && index_b != 0
                         poly = - As[s+1]*a[index_a] + sum*b[index_b]
+                        #println("start: $s , end: $n , index_b: $index_b, poly: $poly")
                         P = push!(P,poly)
                         length_P = length(P)
+                        #println("Index in P: $length_P")
                         Pb_list= push!(Pb_list, length_P)
                         index_list = push!(index_list,index_b)
                     end
@@ -242,6 +250,7 @@ function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
             for i = 1: length(blist)
                 if blist[i] == j 
                     index = i 
+                    break
                 end
             end
             poly = -As[s+1] + sum*b[index]
@@ -277,6 +286,7 @@ function remove_polynomials(P,L)
             end
         end
     end
+    println("delete_list_2: $delete_list")
     deleteat!(P,delete_list)
     return P 
 end
@@ -354,6 +364,8 @@ function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_
     for k = 1: length(P)
         P[k] = evaluate(P[k],vars_all)
     end
+    println("P[29]: ")
+    print(P[29])
     delete_list=[]
     for i = 1:length(b_red)
         P_entry = 0
@@ -365,6 +377,7 @@ function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_
                     if index_list[k] == b_index
                         P_entry = Pb_list[k]
                         delete_list = push!(delete_list,P_entry)
+                        println("delete_list: $delete_list")
                         break
                     end
                 end
@@ -377,8 +390,8 @@ function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_
 end
 
 #Input data
-L = 3
-data_label = "ckeck.txt"
+L = 4
+data_label = "check_4.txt"
 
 #-----main function starts----
 
