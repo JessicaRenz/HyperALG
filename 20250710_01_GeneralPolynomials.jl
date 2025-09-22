@@ -1,163 +1,216 @@
 using Oscar
 
-cd(@__DIR__)  # setzt das Working Directory auf den Ordner des Skripts
+cd(@__DIR__)  					# setting the Working Directory to the folder in which this script is stored
 
-function number2binary(n,L)
-    binary = ""
-    v = 2^(L-1)
-    while v >= 1
-        if n >= v 
-            n = n-v 
-            binary = binary * "1"
+# converts a number to the corresponding binary string						
+function number2binary(n,L)		
+    binary = Vector{Char}(undef,L) 		# Vector to store the bits of the binary string as entries
+    v = 2^(L-1) 				# number that corresponds to the bit furthest left
+    for i in 1:L
+        if n >= v 				#if the current number n contains at least v, then the ith bit is a 1, otherwise a 0
+            n -= v 
+            binary[i] = '1'
         else 
-            binary = binary * "0"
+            binary[i] = '0'
         end
-        v = v/2
+        v/= 2					# halve the bit weight (get the number that corresponds to the next bit in the string)
     end
-    while length(binary) < L 
-        binary = "0" * binary 
-    end
-    return binary 
+    return String(binary)			# return as a string
 end
 
+# converts a binary string into the corresponding number 
 function binary2number(bin,L)
     num = 0 
     for i = 1:L 
         if bin[i] == '1' 
-            num = num + 2^(L-i)
+           num += 2^(L-i)
         end
     end
     return num
 end
 
+# figures out which nodes are directly connected
+# the code structure of this function is taken from HyperHMM (https://github.com/StochasticBiology/hypercube-hmm/tree/main) and converted into Julia code
 function possible_transitions(L)
-    n_partners = []
-    cumulative_partners = []
-    partners = []
+    # n_partners[i] stores the number of states reachable from state i-1
+    n_partners = zeros(Int, 2^L)
+    
+    # cumulative partners gives the starting index in 'partners' for the transitions corresponding to state i-1
+    cumulative_partners = zeros(Int, 2^L)
+    
+    # partners stores all possible transitions for all states sequentially.
+    # The transitions from state i-1 are located at indices cumulative_partners[i]:(cumulative_partners[i+1]-1) in 'partners'
+    partners = Vector{Int}(undef,L*2^(L-1))			 
+    idx = 1
     for i = 0:2^L -1 
-        vertex = number2binary(i,L)
-        n_partners = push!(n_partners,0)
+       	n_partners[i+1] = 0
         for j = 1:L 
-            if vertex[j] == '0'
-                chars= collect(vertex) 
-                chars[j] = '1'
-                end_node = join(chars)
-                end_node_int = binary2number(end_node,L)
-                partners = push!(partners, end_node_int)
-                n_partners[i+1] = n_partners[i+1] +1
+            if (i & (1 << (L-j))) == 0			# bit-wise comparison between the binary sequence for i and the sequence with only bit L-j is 1. 
+            							#returns 1 only if in all comparison both bits are 1
+                end_node_int = i | (1 << (L-j))		# flips bit L-j to a 1
+                partners[idx] = end_node_int
+                idx += 1
+                n_partners[i+1] += 1
             end
         end
         if i == 0
-            cumulative_partners = push!(cumulative_partners,1)
+            cumulative_partners[i+1] = 1
         else 
             c = cumulative_partners[i] + n_partners[i] 
-            #print("i: ", i, ", n_partners: ", n_partners[i],", cum_partners: ", cumulative_partners[i] )
-            cumulative_partners = push!(cumulative_partners,c)
+            cumulative_partners[i+1] = c
         end
     end
+    resize!(partners, idx-1)
     return (n_partners = n_partners, cumulative_partners = cumulative_partners, partners = partners)
 end
 
+# gives back a list of all edges
 function edges(L,n_partners,cumulative_partners,partners)
-    start=[]
-    dest=[]
+    total_edges = sum(n_partners)
+    start = Vector{Int}(undef, total_edges) 		# entry i stores the starting node of edge i
+    dest = Vector{Int}(undef, total_edges)		# entry i stores the corresponding end node of edge i
     s = 0
     j = 1
-    while j<= n_partners[1]
+    idx = 1
+    for j in 1:n_partners[1] 				# finding all edges that start in node 0
         n = partners[j]
-        start = push!(start,s)
-        dest = push!(dest,n)
-        j= j+1
+        start[idx] = s
+        dest[idx] = n
+        idx += 1
     end
-    for i = 1: 2^L -1
-        j = 1
-        while j <= n_partners[i+1]
-            s = i 
-            c = cumulative_partners[i+1]
+    for i = 1: 2^L -1					# go through all remaining nodes and find the corresponding outgoing edges
+        s=i
+        c = cumulative_partners[i+1]
+        for j in 1:n_partners[i+1]
             n = partners[c+j-1]
-            start = push!(start,s)
-            dest = push!(dest,n)
-            j = j+1
+            start[idx] = s
+            dest[idx] = n
+            idx += 1
         end
     end
     return(start = start, dest = dest)
 end
 
+#defines the polynomial ring to work in 
 function define_variables(L,start, dest)
-    d = L*2^(L-1) -L 
-    R, a, b = polynomial_ring(QQ, :a => 1:d, :b => 1:d)
-    alist = []
-    blist = []
-    for i = 1:length(start)
+    d = L*2^(L-1) -L 							# number of edges in the hypercube we need to assign variables (i.e. for which the weight is not always 1)
+    R, a, b = polynomial_ring(QQ, :a => 1:d, :b => 1:d)			# defines an 'a' and a 'b' variable for every edge
+    alist = Vector{Int}(undef, length(start))				# entry i indicates the number of the edge (=index in 'start' and 'dest') to which variable a[i] belongs
+    blist = Vector{Int}(undef, length(start))				# entry i indicates the number of the edge (=index in 'start' and 'dest') to which variable b[i] belongs
+    
+    ai = 0
+    bi = 0
+    
+    for i = 1:length(start)						# the edges starting in node 0 don't need a 'b' variable
         if start[i] != 0
-            blist = push!(blist,i)
+            bi += 1
+            blist[bi] = i
         end
-        if dest[i] != 2^L-1
-            alist = push!(alist,i)
+        if dest[i] != 2^L-1						# the edges ending in the final node don't need an 'a' variable
+            ai += 1
+            alist[ai] = i
         end
     end
+    
+    resize!(alist, ai)
+    resize!(blist, bi)
+    
     return (R, a, b , alist = alist, blist = blist)
 end
 
+#read the data set in 
 function read_data(L,data_label)
-    data = readlines(data_label)
-    count = zeros(Int,2^L )
-    for i = 1: length(data)
-        bin = data[i]
+    N = zeros(Float64,2^L )						# entry i stores the proportion of node i-1 in the dataset
+    n = 0
+    for bin in eachline(data_label)
         num = binary2number(bin,L)
-        count[num + 1] = count[num+1]+1
+        N[num + 1] += 1
+        n += 1
     end
-    n = length(data)
-    N = count ./ n
+    if n == 0
+    	error("No data found in file $data_label")
+    end
+    N ./= n
     return N
 end
 
+# calculates the proportions of all trajectories that pass a certain node, taking into account forward and backward contributions
 function A_polynomials(L,R,a,b,N,start, dest, alist, blist)
-    CFN = Vector{typeof(one(R))}(undef,2^L)
+    #-------------------------------------------------------------------------------
+    # Build adjacency lists from edge list (start, dest)
+    # incoming[n+1] = indices of edge ending at node n
+    # outgoing[n+1] = indices of edges starting from node n
+    #-------------------------------------------------------------------------------
+    incoming = [Int[] for _ in 1:2^L]
+    outgoing = [Int[] for _ in 1:2^L]
+    for j in 1:length(start)
+    	push!(incoming[dest[j]+1],j)
+    	push!(outgoing[start[j]+1],j)
+    end
+    
+    #-----------------------------------------------------------------------------
+    # Build lookup arrays for alist and blist
+    # These map edge index j -> its position in alist/blist
+    #-----------------------------------------------------------------------------
+    a_index = zeros(Int, length(dest))
+    for (k,j) in pairs(alist)
+         a_index[j] = k
+    end
+    
+    b_index = zeros(Int, length(start))
+    for (k,j) in pairs(blist)
+         b_index[j] = k
+    end
+
+    #------------------------------------------------------------------------------
+    # Initialize coefficient arrays (as elements of the polynomial ring R)
+    # CFN = "forward" coefficients
+    # CBN = "backward" coefficients
+    # A = final polynomial values (A[i] reports the proportion of trajectories that pass through node i-1)
+    # Note: we use rationalize(N[...]) to convert floats to rationals before embedding them into the polynomial ring R
+    #------------------------------------------------------------------------------
+    CFN = fill(R(0),2^L)
     CFN[1] = R(rationalize(N[1]))
-    CBN = Vector{typeof(one(R))}(undef,2^L)
+    
+    CBN = fill(R(0),2^L)
     CBN[2^L] = R(rationalize(N[2^L]))
-    A = Vector{typeof(one(R))}(undef,2^L)
+    A = fill(R(0),2^L)
+    
     A[1] = R(rationalize(1))
     A[2^L] = R(rationalize(1))
+    
+    #------------------------------------------------------------------------------
+    # Dynamic programming over the hypercube:
+    # At step i, compute CFN for nodes with i ones in their binary label
+    # At step L-i, compute CBN for nodes with L-i ones
+    #------------------------------------------------------------------------------
     for i = 1:(L-1)
         for n = 1:2^L-2
-            bin = number2binary(n,L)
-            num_1 = count(c -> c == '1',bin)
+            num_1 = count_ones(n)				# number of ones in a binary n
+            
+            #Forward recursion
             if num_1 == i
                 CFN[n+1] = R(rationalize(N[n+1]))
-                for j = 1: length(dest)
-                    if dest[j] == n 
-                        s = start[j]
-                        index = 0
-                        for k = 1: length(alist)
-                            if alist[k] == j 
-                                index = k 
-                                break
-                            end
-                        end
-                        CFN[n+1]=CFN[n+1] + CFN[s+1]*a[index]
-                    end
+                for j in incoming[n+1]				# edges ending at n
+                    s = start[j]				# source node of edge j
+                    CFN[n+1] += CFN[s+1]*a[a_index[j]]		# update forward coefficient
                 end
             end
+            
+            # Backward recursion
             if num_1 == L-i
                 CBN[n+1] = R(rationalize(N[n+1]))
-                for j = 1: length(start)
-                    if start[j] == n 
-                        g = dest[j]
-                        index = 0
-                        for k = 1: length(blist)
-                            if blist[k]==j 
-                                index = k 
-                                break
-                            end
-                        end
-                        CBN[n+1] = CBN[n+1] + CBN[g+1]*b[index]
-                    end
+                for j in outgoing[n+1]				# edges starting at n
+                    g = dest[j]					# target node of edge j 
+                    CBN[n+1] += CBN[g+1]*b[b_index[j]]		# update backward coefficient
                 end
             end
         end
     end
+    
+    #-------------------------------------------------------------------------------
+    # Combine forward and backward contributions into A
+    #-------------------------------------------------------------------------------
     for n = 1: 2^L -2
         A[n+1] = CFN[n+1] + CBN[n+1] - R(rationalize(N[n+1]))
     end
@@ -165,224 +218,208 @@ function A_polynomials(L,R,a,b,N,start, dest, alist, blist)
 end
 
 function polynomial_system(L,R,a,b,As,start, dest, alist, blist)
+    #-------------------------------------------------------------------------------
+    # build adjacency list
+    #-------------------------------------------------------------------------------
+    incoming = [Int[] for _ in 1:2^L] 				#edges ending at node n
+    for j in 1:length(start)
+    	push!(incoming[dest[j]+1],j)
+    end
+    
+    #-------------------------------------------------------------------------------
+    # Build lookup arrays (edge index -> position in alist/blist)
+    #-------------------------------------------------------------------------------
+    a_index = zeros(Int, length(dest))
+    for (k,j) in pairs(alist)
+    	a_index[j] = k
+    end
+    
+    b_index = zeros(Int, length(start))
+    for (k,j) in pairs(blist)
+    	b_index[j] = k
+    end
+    
+    #--------------------------------------------------------------------------------
+    # Initialize polynomial list
+    #--------------------------------------------------------------------------------
     P = Vector{typeof(one(R))}(undef,2^L-2)
     Pb_list =[]
     index_list = []
+    
+    #--------------------------------------------------------------------------------
+    # First part: equations for the nodes from n=1,...,2^L -2
+    #--------------------------------------------------------------------------------
     for n = 1: 2^L -2
         P[n] = -As[n+1]
-        for i = 1:length(dest)
-            if dest[i] == n 
-                s = start[i]
-                index = 0
-                for k = 1: length(alist)
-                    if alist[k] == i
-                        index = k
-                        break
-                    end
-                end 
-                P[n] = P[n] + As[s+1]*a[index]
-            end
-        end
-    end
-    j = 0
-    for n = 1:2^L -1
-        bin = number2binary(n,L)
-        num_1 = count(c -> c == '1',bin)
-        if num_1 != 1
-            sum = 0
-            for i = 1: length(dest)
-                if dest[i] == n 
-                    s = start[i]
-                    index = 0
-                    for k = 1:length(alist)
-                        if alist[k] == i 
-                            index = k 
-                            break
-                        end
-                    end
-                    if index != 0
-                        sum = sum + As[s+1]*a[index]
-                    end
-                end
-            end
-            for i = 1: length(dest)
-                if dest[i] == n 
-                    s = start[i]
-                    index_a = 0
-                    index_b = 0
-                    for k = 1:length(alist)
-                        if alist[k] == i 
-                            index_a = k 
-                            break
-                        end
-                    end
-                    for l = 1:length(blist)
-                        if blist[l] == i 
-                            index_b = l 
-                            break
-                        end
-                    end 
-                    if index_a != 0 && index_b != 0
-                        poly = - As[s+1]*a[index_a] + sum*b[index_b]
-                        #println("start: $s , end: $n , index_b: $index_b, poly: $poly")
-                        P = push!(P,poly)
-                        length_P = length(P)
-                        #println("Index in P: $length_P")
-                        Pb_list= push!(Pb_list, length_P)
-                        index_list = push!(index_list,index_b)
-                    end
-                end
-            end
-        end
-    end
-    n = 2^L - 1
-    sum = 0
-    for i = 1:length(dest)
-        if dest[i] == n 
-            s = start[i] 
-            sum = sum + As[s+1]
-        end
-    end
-    for j = 1:length(dest)
-        if dest[j] == n 
+        for j in incoming[n+1]			# edges ending at n 
             s = start[j]
-            index = 0
-            for i = 1: length(blist)
-                if blist[i] == j 
-                    index = i 
-                    break
+            if a_index[j] != 0			# when a_index[j] == 0, this means the edge j has no corresponding value in alist
+                P[n] += As[s+1]*a[a_index[j]]
+            end
+        end
+    end
+    
+    #---------------------------------------------------------------------------------
+    # Second part: constraints given through the introduction of the bi;j
+    #---------------------------------------------------------------------------------
+    for n = 1:2^L -1
+        if count_ones(n) != 1
+            sum = R(0)
+            # sum over incoming edges 
+            for j in incoming[n+1]		
+                s = start[j]
+                if a_index[j] !=0 
+                     sum += As[s+1]*a[a_index[j]]
                 end
             end
-            poly = -As[s+1] + sum*b[index]
-            P = push!(P,poly)
-            length_P = length(P)
-            Pb_list = push!(Pb_list,length_P)
-            index_list = push!(index_list,index)
+            
+            # set the b_{i;j} into relation to the a_{i;j}
+            for j in incoming[n+1]
+                s = start[j]  
+                if a_index[j] != 0 && b_index[j] != 0
+                    poly = - As[s+1]*a[a_index[j]] + sum*b[b_index[j]]
+                    push!(P,poly)
+                    push!(Pb_list, length(P))
+                    push!(index_list,b_index[j])
+                end
+            end
+        end
+    end
+    
+    #----------------------------------------------------------------------
+    # Last node (all a_{i;n} are 1)
+    #----------------------------------------------------------------------
+    n = 2^L - 1
+    sum = R(0)
+    for j in incoming[n+1]
+        s = start[j] 
+        sum += As[s+1]
+    end
+    
+    for j in incoming[n+1]
+        s = start[j]
+        if b_index[j] != 0
+            poly = -As[s+1] + sum*b[b_index[j]]
+            push!(P,poly)
+            push!(Pb_list,length(P))
+            push!(index_list,b_index[j])
         end
     end
     return (P_list =P,Pb_list =Pb_list, index_list =index_list) 
 end
 
+# removes one redundant polynomial for every step 1,...,L-1
 function remove_polynomials(P,L)
-    delete_list = []
-    for i = 1:L
-        number = 0
-        for j = 1:2^L -2
-            bin = number2binary(j,L)
-            num_1 = count(c -> c == '1',bin) 
-            if num_1 == i
-                number = number +1
-            end
-        end
-        count_nodes = 0
-        for j = 1:2^L-2
-            bin = number2binary(j,L)
-            num_1 = count(c -> c == '1',bin)
-            if num_1 == i 
-                count_nodes = count_nodes +1
-                if count_nodes == number 
-                    delete_list = push!(delete_list,j)
-                end 
-            end
-        end
+    # store the last node index for each step in the hypercube
+    last_node = zeros(Int,L-1)
+    for j = 1:2^L -2
+        w = count_ones(j)
+        last_node[w] = j
     end
-    println("delete_list_2: $delete_list")
+    
+    # Build delete list 
+    delete_list = filter(!=(0), last_node)
     deleteat!(P,delete_list)
     return P 
 end
 
-function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_list,index_list)
-    nb = zeros(Int,2^L)
-    na = zeros(Int,2^L)
-    for n = 0:2^L-1
-        na[n+1] = n_partners[n+1]
-        cnt = 0
-        for i = 1:length(dest)
-            if dest[i] == n 
-                cnt = cnt +1
-            end
-        end
-        nb[n+1] = cnt
+# eliminate redundant variables from the system
+function remove_variables( start, dest, L, a ,alist, b, blist, P, Pb_list,index_list)
+    #-------------------------------------------------------------------------------------------
+    # Build adjacency lists
+    # outgoing[n+1] = all edges starting at node n
+    # incoming[n+1] = all edges ending at node n
+    #--------------------------------------------------------------------------------------------
+    outgoing = [Int[] for _ in 1:2^L]
+    incoming = [Int[] for _ in 1:2^L]
+    for e in 1:length(start)
+    	push!(outgoing[start[e]+1], e)
+    	push!(incoming[dest[e]+1], e)
     end
+    
+    #--------------------------------------------------------------------------------------------
+    # Build lookup arrays: edge index -> position in alist/blist
+    # If edge is not in alist/blist, entry stays 0
+    #--------------------------------------------------------------------------------------------
+    a_index = zeros(Int, length(dest))
+    for (k,j) in pairs(alist)
+    	a_index[j] = k
+    end
+    
+    b_index = zeros(Int, length(start))
+    for (k,j) in pairs(blist)
+    	b_index[j] = k
+    end
+    
+    #--------------------------------------------------------------------------------------------
+    # Collect all variables into one vector [a;b]
+    # length of a is stored so we can offset b correctly
+    #--------------------------------------------------------------------------------------------
     vars_all = [a;b]
     length_a = length(a)
-    for s = 0:2^L-2
-        i = 0
-        sum_a = 0
-        for e = 1:length(start)
-            if start[e] == s 
-                i = i+1
-                if i != na[s+1]
-                    add_a = 0
-                    for j = 1:length(alist)
-                        if alist[j] == e 
-                            add_a = add_a + a[j]
-                            break
-                        end
-                    end
-                    sum_a = sum_a + add_a 
-                else
-                    for j = 1:length(alist)
-                        if alist[j] == e 
-                            vars_all[j] = 1 - sum_a
-                            break
-                        end
-                    end
-                end
-            end
-        end
+   
+   #---------------------------------------------------------------------------------------------
+   # Process a-variables:
+   # For each node s, eliminate the last outgoing "a"-edge variable by rewriting it as 1 - sum(other outgoings a's)
+   #---------------------------------------------------------------------------------------------
+   for s in 0:2^L-2
+   	edges = outgoing[s+1]
+   	sum_a = 0
+   	for (i,e) in enumerate(edges)
+   		if a_index[e] == 0
+   			continue
+   		end
+   		if i != length(edges)
+   			sum_a += a[a_index[e]]
+   		else 
+   		 	vars_all[a_index[e]] = 1-sum_a
+   		end
+   	end
+   end
+   
+   #-------------------------------------------------------------------------------------------
+   # Process b-variables:
+   # For each node n, eliminate the last incoming "b"-edge variable by rewriting it as 1 - sum(other incoming b's)
+   # Keep track of which b-edges were eliminated  (b_red)
+   #--------------------------------------------------------------------------------------------
+    b_red = Int[]
+    for n in 1:2^L-1
+	edges = incoming[n+1]
+	sum_b = 0
+	for (i,e) in enumerate(edges)
+		if b_index[e] == 0
+			continue
+		end
+		if i != length(edges)
+			sum_b += b[b_index[e]]
+		else
+			vars_all[length_a + b_index[e]] = 1- sum_b
+			push!(b_red, e)
+		end
+	end
     end
-    b_red = []
-    for n = 1:2^L-1
-        i = 0
-        sum_b = 0
-        for e = 1:length(dest)
-            if dest[e] == n 
-                i = i+1
-                if i != nb[n+1]
-                    add_b = 0
-                    for j = 1:length(blist)
-                        if blist[j] == e 
-                            add_b = add_b + b[j]
-                            break
-                        end
-                    end
-                    sum_b = sum_b + add_b 
-                else 
-                    for j = 1:length(blist)
-                        if blist[j] == e 
-                            vars_all[length_a+j] = 1 - sum_b
-                            append!(b_red,e)
-                            break
-                        end
-                    end
-                end
-            end
-        end
-    end
-    println("vars_all: $vars_all")
+  
+  #----------------------------------------------------------------------------------------------
+  # Evaluate all polynomials with the reduced variable set
+  #-----------------------------------------------------------------------------------------------
     for k = 1: length(P)
         P[k] = evaluate(P[k],vars_all)
     end
-    println("P[29]: ")
-    print(P[29])
-    delete_list=[]
-    for i = 1:length(b_red)
-        P_entry = 0
-        e = b_red[i]
-        for j = 1:length(blist)
-            if blist[j] == e 
-                b_index = j
-                for k = 1:length(index_list)
-                    if index_list[k] == b_index
-                        P_entry = Pb_list[k]
-                        delete_list = push!(delete_list,P_entry)
-                        println("delete_list: $delete_list")
+    
+    #---------------------------------------------------------------------------------------------
+    # Remove polynomials corresponding to eliminated b-variables
+    #---------------------------------------------------------------------------------------------
+    delete_list = Int[]
+    for e in b_red
+        if b_index[e] == 0
+        	continue
+        end
+        
+        for k in 1:length(index_list)
+		if index_list[k] == b_index[e]
+                        push!(delete_list,Pb_list[k])
                         break
-                    end
                 end
-                break
-            end
         end
     end
     deleteat!(P,delete_list)
@@ -390,25 +427,42 @@ function remove_variables(n_partners, start, dest, L, a ,alist, b, blist, P, Pb_
 end
 
 #Input data
-L = 4
-data_label = "check_4.txt"
+L = 8
+data_label = "ovarian_8.txt"
 
 #-----main function starts----
+@time begin
+transitions = possible_transitions(L);
+n_partners = transitions.n_partners;
+cumulative_partners = transitions.cumulative_partners;
+partners = transitions.partners;
+edges_list = edges(L,n_partners,cumulative_partners,partners);
+start = edges_list.start;
+dest = edges_list.dest;
 
-transitions = possible_transitions(L)
-n_partners = transitions.n_partners
-cumulative_partners = transitions.cumulative_partners
-partners = transitions.partners
-edges_list = edges(L,n_partners,cumulative_partners,partners)
-start = edges_list.start
-dest = edges_list.dest
-var = define_variables(L, start, dest)
-a = var.a
-b = var.b
-N = read_data(L,data_label)
-As = A_polynomials(L,var.R,a,b,N,start,dest,var.alist,var.blist)
+# Give the memory of no longer needed variables free
+transitions = nothing
+n_partners = nothing
+cumulative_partners = nothing
+partners = nothing
+edges_list = nothing
 
-P = polynomial_system(L,var.R,a,b,As,start,dest,var.alist,var.blist)
+varis = define_variables(L, start, dest);
+a = varis.a;
+b = varis.b;
+N = read_data(L,data_label);
+As = A_polynomials(L,varis.R,a,b,N,start,dest,varis.alist,varis.blist);
 
-P_red = remove_variables(n_partners,start,dest,L,a,var.alist,b,var.blist,P.P_list,P.Pb_list,P.index_list)
+N = nothing
+
+P = polynomial_system(L,varis.R,a,b,As,start,dest,varis.alist,varis.blist);
+
+As = nothing
+
+P_red = remove_variables(start,dest,L,a,varis.alist,b,varis.blist,P.P_list,P.Pb_list,P.index_list);
+
+P = nothing
 P_final = remove_polynomials(P_red,L)
+#print(P_final)
+end
+
