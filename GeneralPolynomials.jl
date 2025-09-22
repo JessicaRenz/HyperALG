@@ -2,22 +2,6 @@ using Oscar
 
 cd(@__DIR__)  					# setting the Working Directory to the folder in which this script is stored
 
-# converts a number to the corresponding binary string						
-function number2binary(n,L)		
-    binary = Vector{Char}(undef,L) 		# Vector to store the bits of the binary string as entries
-    v = 2^(L-1) 				# number that corresponds to the bit furthest left
-    for i in 1:L
-        if n >= v 				#if the current number n contains at least v, then the ith bit is a 1, otherwise a 0
-            n -= v 
-            binary[i] = '1'
-        else 
-            binary[i] = '0'
-        end
-        v/= 2					# halve the bit weight (get the number that corresponds to the next bit in the string)
-    end
-    return String(binary)			# return as a string
-end
-
 # converts a binary string into the corresponding number 
 function binary2number(bin,L)
     num = 0 
@@ -427,8 +411,8 @@ function remove_variables( start, dest, L, a ,alist, b, blist, P, Pb_list,index_
 end
 
 #Input data
-L = 8
-data_label = "ovarian_8.txt"
+L = 4
+data_label = "ovarian_4.txt"
 
 #-----main function starts----
 @time begin
