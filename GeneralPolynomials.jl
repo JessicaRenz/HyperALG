@@ -1,4 +1,5 @@
 using Oscar
+using DelimitedFiles
 
 cd(@__DIR__)  					# setting the Working Directory to the folder in which this script is stored
 
@@ -410,12 +411,20 @@ function remove_variables( start, dest, L, a ,alist, b, blist, P, Pb_list,index_
     return P 
 end
 
-#Input data
-L = 4
-data_label = "ovarian_4.txt"
+# Get command line arguments
+data_label = ARGS[1]
+
+#Infer L from the first line of the file
+first_line = open(data_label, "r") do io
+	readline(io)
+end
+
+L = length(first_line)
+
+println("Creating polynomials for L= $L with data from $data_label")
 
 #-----main function starts----
-@time begin
+
 transitions = possible_transitions(L);
 n_partners = transitions.n_partners;
 cumulative_partners = transitions.cumulative_partners;
@@ -447,6 +456,25 @@ P_red = remove_variables(start,dest,L,a,varis.alist,b,varis.blist,P.P_list,P.Pb_
 
 P = nothing
 P_final = remove_polynomials(P_red,L)
-#print(P_final)
+
+result_file = "polynomials_$data_label"
+a_variables_file = "a_variables_$data_label"
+b_variables_file = "b_variables_$data_label"
+
+println("Writing polynomials in file $result_file and the variable - edges correspondences in $a_variables_file and $b_variables_file")
+
+open(result_file, "w") do io
+	for (i, val) in enumerate(P_final)
+		println(io, "P[$i] = $val")
+	end
 end
 
+
+
+header = [("variable", "from", "to")]
+
+rows_a = [(a[i], start[varis.alist[i]], dest[varis.alist[i]]) for i in 1:length(varis.alist)]
+writedlm(a_variables_file, rows_a)
+
+rows_b = [(b[i], start[varis.blist[i]], dest[varis.blist[i]]) for i in 1:length(varis.blist)]
+writedlm(b_variables_file, rows_b)
