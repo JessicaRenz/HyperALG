@@ -37,3 +37,8 @@ This file contains the data to the small toy example for `L=3` in the paper.
 
 ### ovarian.txt
 This file contains the data we used for the cancer case study for `L=4` in the paper. The features describe the presence or absence of chromosomal abberations in 87 samples of ovarian cancer patients: Feature 1: `8q+`, Feature 2: `3q+`, Feature 3: `5q-` and Feature 4: `4q-`. These labels indicate the index of the chromosome where the mutation occurs, as well as the chromosomal arm (p or q). A + indicates addition while - denotes a loss.
+
+## References
+Data source:
+
+Knutsen, T., Gobu, V., Knaus, R., Padilla‐Nash, H., Augustus, M., Strausberg, R.L., Kirsch, I.R., Sirotkin, K. and Ried, T., 2005. The interactive online SKY/M‐FISH & CGH database and the Entrez cancer chromosomes search database: linkage of chromosomal aberrations with the genome sequence. Genes, Chromosomes and Cancer, 44(1), pp.52-64.
