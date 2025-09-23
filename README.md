@@ -1,4 +1,22 @@
 # HyperALG
+An Algebraic Approach to Evolutionary Accumulation Models: Creating a set of polynomial equations for given cross-sectional data, whose solution set describes all possible transition parameters to that system. 
 
-### Three_features.jl
-This file contains a function that calculates the defining polynomials for a given dataset in the case of three features. It requires the following `Symbolics` package. 
+<img width="740" height="514" alt="overview" src="https://github.com/user-attachments/assets/1b6d4a11-48e7-4f98-a71f-787f54dd54dc" />
+
+## Requirements
+For running HyperALG, you need the ability to run Julia code, and having the packages `Oscar.jl` and `DelimitedFiles.jl`.
+
+## Running HyperALG
+HyperALG can be runned directly from the command line by specifying the data set as an input parameter:
+```
+julia HyperALG.jl [dataset.txt]
+```
+ HyperLAU expects the data as a text file, the ending has to be included in the input parameter.
+
+ Some functions in this code originally come from HyperHMM https://github.com/StochasticBiology/hypercube-hmm/tree/main and were transferred to Julia. The functions to which this applies are marked in the source code.
+
+ ## Output
+HyperALG outputs the three text files `polynomials_[dataset.txt]`, `a_variables_[dataset.txt]` and `b_variables_[dataset.txt]`.
+- **polynomials_[...].txt** In this output you can find the final set of polynomials describing the evolutionary process given the data. Setting all of them `= 0` gives you the set of polynomial equations that the transition parameters need to fulfill. The variables `a[i]` describe the forward transitions and the variables `b[i]` the backwards proportions.
+- **a_variables_[...].txt** This file contains a table that shows the assignment of the `a[i]` to the edges in the hypercube. The first column contains the name of the variable, the second and third contain the start node and the end node of the corresponding edge, respectively.
+- **b_variables_[...].txt** This file contains a table that shows the assignment of the `b[i]` to the edges in the hypercube. The first column contains the name of the variable, the second and third contain the start node and the end node of the corresponding edge, respectively. 
