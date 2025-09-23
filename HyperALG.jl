@@ -4,6 +4,7 @@ using DelimitedFiles
 cd(@__DIR__)  					# setting the Working Directory to the folder in which this script is stored
 
 # converts a binary string into the corresponding number 
+# the code structure of this function is taken from HyperHMM (https://github.com/StochasticBiology/hypercube-hmm/tree/main) and converted into Julia code
 function binary2number(bin,L)
     num = 0 
     for i = 1:L 
