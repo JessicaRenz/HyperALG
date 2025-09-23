@@ -15,6 +15,14 @@ julia HyperALG.jl [dataset.txt]
 
  Some functions in this code originally come from HyperHMM https://github.com/StochasticBiology/hypercube-hmm/tree/main and were transferred to Julia. The functions to which this applies are marked in the source code.
 
+ The input is expected to be a list of binary strings (cross-sectional data), for example:
+ ```
+001
+001
+100
+101
+```
+
  ## Output
 HyperALG outputs the three text files `polynomials_[dataset.txt]`, `a_variables_[dataset.txt]` and `b_variables_[dataset.txt]`.
 - **polynomials_[...].txt** In this output you can find the final set of polynomials describing the evolutionary process given the data. Setting all of them `= 0` gives you the set of polynomial equations that the transition parameters need to fulfill. The variables `a[i]` describe the forward transitions and the variables `b[i]` the backwards proportions.
