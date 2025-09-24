@@ -38,6 +38,12 @@ This file contains the data to the small toy example for `L=3` in the paper.
 ### ovarian.txt
 This file contains the data we used for the cancer case study for `L=4` in the paper. The features describe the presence or absence of chromosomal abberations in 87 samples of ovarian cancer patients: Feature 1: `8q+`, Feature 2: `3q+`, Feature 3: `5q-` and Feature 4: `4q-`. These labels indicate the index of the chromosome where the mutation occurs, as well as the chromosomal arm (p or q). A + indicates addition while - denotes a loss.
 
+### optimizing_a_b.jl
+For running this Julia code, the package `Optim.jl` needs to be installed. It takes the 28 polynomials we get when running `HyperALG.jl` on the dataset `ovarian.txt` and creates the sum of the squares of these. Minimizing the obtained function delivers us an estimated value for all veriables `a[i]` and `b[i]`. 
+
+### Ovarian_L4.jl
+For running this Julia code, the package `Oscar.jl` needs to be installed. It contains the HyperALG code itself as well as the evaluation of the polynomials obtained at the values provided by HyperLAU (https://github.com/JessicaRenz/HyperLAU) and HyperTraPS (https://github.com/StochasticBiology/hypertraps-ct) for the `a[i]` variables. The results are also based on the dataset `ovarian.txt`. In a second step, also the values for the `b[i]` variables are substituted. These are obtained by an minimization procedure exactly as in `optimizing_a_b.jl`. 
+
 ## References
 Data source:
 
