@@ -1,7 +1,8 @@
 # HyperALG
 An Algebraic Approach to Evolutionary Accumulation Models: Creating a set of polynomial equations for given cross-sectional data, whose solution set describes all possible transition parameters to that system. 
 
-<img width="740" height="514" alt="overview" src="https://github.com/user-attachments/assets/1b6d4a11-48e7-4f98-a71f-787f54dd54dc" />
+<img width="774" height="543" alt="overview" src="https://github.com/user-attachments/assets/83fc42f2-4593-4756-b530-1432266eaf0f" />
+
 
 ## Requirements
 For running HyperALG, you need the ability to run Julia code, and having the packages `Oscar.jl` and `DelimitedFiles.jl`.
